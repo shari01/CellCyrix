@@ -1,0 +1,235 @@
+# =============================================================================
+# Single-cell 10x pipeline configuration
+# -----------------------------------------------------------------------------
+# Edit THIS file to control the pipeline — you do NOT need to touch main.py.
+#
+# Run with:
+#     python main.py                  # uses this file (config.yaml)
+#
+# There is no CLI. To run a second configuration, copy this file and point
+# `CONFIG_FILE` at the copy in main.py.
+#
+# Notes on paths (Windows):
+#   Keep paths in SINGLE quotes so backslashes are taken literally, e.g.
+#     single_10x_dir: 'D:\data\GSE266852_OES19441150'
+#   Relative paths (e.g. input_data/...) are resolved from the folder you run
+#   `python main.py` in — i.e. this package root.
+# Use `null` for "not set" (e.g. auto-detect / use default).
+# =============================================================================
+
+# Which pipeline to run:
+#   "single" -> analyse ONE 10x dataset        (uses the `single:` section)
+#   "multi"  -> analyse MANY samples / cohorts  (uses the `multi:` section)
+mode: multi
+
+# -----------------------------------------------------------------------------
+# COMMON settings — applied to whichever mode runs.
+# Anything set under `single:` / `multi:` below OVERRIDES the value here.
+# -----------------------------------------------------------------------------
+common:
+  do_pathway_clustering: false   # run pathway enrichment analysis
+  do_dpt: true                  # compute diffusion pseudotime (trajectory ordering)
+  # DPT needs a biological START. "auto" = LLM/heuristic picks the baseline group
+  # (e.g. NO_HPV / normal) and roots there; if no baseline group exists DPT is
+  # SKIPPED (not rooted arbitrarily). Set a group name to force it (e.g. NO_HPV).
+  dpt_root_group: auto
+  geo_json_path: null           # null = auto-detect GSE*_metadata.json in the input dir
+  logos_dir: null               # null = use default logos directory
+  generate_report: true         # build the HTML/PDF report after the run
+  prepare_for_bisque: true      # write a Bisque-ready h5ad for deconvolution
+
+  # --- cell-type annotation: multi-method consensus (biologically accurate) ---
+  # Voters: CellTypist (ML) + SingleR (reference) + Knowledge-based (AI marker-reasoning) + PubMed (literature).
+  # Final label per cluster = majority vote of up to FOUR voters, with a canonical
+  # lineage gate. Turn any voter on/off with true/false; the consensus uses whoever
+  # is on (ties broken by confidence + lineage gate). At least one must be on.
+  enable_celltypist: true       # CellTypist ML classifier voter
+  enable_knowledge_based: true  # Knowledge-based (AI marker-reasoning) voter — needs OPENROUTER_API_KEY + OPENROUTER_MODEL. Also powers auto tissue/model/reference/root selection.
+  enable_singler: true          # SingleR reference voter — needs R + SingleR + celldex (verified installed)
+  enable_pubmed: true           # PubMed literature (RAG) voter — needs internet + OpenRouter; adds ~1 LLM call/cluster (slower)
+  # tissue/species drive model+reference selection (cell biology, NOT disease).
+  # "auto" = infer from the study metadata JSON (GSE*_metadata.json in the input
+  # dir): species from `taxon`, tissue from title/summary/sample titles via LLM.
+  # Set a fixed value (e.g. cervix / human) to override the auto-inference.
+  tissue: auto
+  species: auto
+  # CellTypist model: "auto" = LLM picks a tissue-appropriate model from the
+  # human catalog (celltypist_catalog.py) using `tissue`; if no organ matches it
+  # falls back to the general immune model (Immune_All_Low.pkl). Selection is
+  # tissue-driven, never disease-driven. Set a fixed .pkl name to force one
+  # (e.g. Immune_All_Low.pkl, Human_Endometrium_Atlas.pkl).
+  celltypist_model: auto
+  # SingleR reference: "auto" = LLM picks a species+tissue-appropriate celldex
+  # reference; if none matches it falls back to BlueprintEncodeData (broad,
+  # covers non-immune). Set a fixed name to force one (e.g. HumanPrimaryCellAtlasData,
+  # BlueprintEncodeData, MonacoImmuneData).
+  singler_reference: auto
+
+  # --- skip flags (reduce output volume) ---
+  skip_tsne: true                     # skip t-SNE (UMAP is usually enough)
+  skip_pca_cluster_plots: true        # skip PCA-based cluster/celltype overlays
+  skip_per_celltype_plots: true       # skip individual per-celltype dot/rank plots
+  skip_per_celltype_csvs: true        # skip individual per-celltype marker CSVs
+  skip_per_cluster_marker_csvs: true  # skip individual per-cluster marker CSVs
+
+  # --- cleanup flags (remove intermediates after the run) ---
+  cleanup_raw_pathway_csvs: true        # delete *_combined_pathways_RAW.csv
+  cleanup_dedup_logs: true              # delete *_pathway_dedup_log.txt
+  cleanup_pipeline_log: false           # keep pipeline.log after a run (retained execution record)
+  cleanup_per_cluster_marker_csvs: true # delete per-cluster marker CSVs
+
+# =============================================================================
+# TUNING SECTIONS (optional)
+# -----------------------------------------------------------------------------
+# Every key below is OPTIONAL and every default reproduces the pipeline's previous
+# hard-coded behaviour, so a config file that omits these sections entirely runs
+# exactly as it did before. Sections may live here at the top level or nested under
+# `common:` — both are read. A flat key of the same name (anywhere) still wins.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CLUSTERING — Leiden is and remains the pipeline's structural partition.
+# -----------------------------------------------------------------------------
+clustering:
+  # Resolution for the PRIMARY clustering written to obs['leiden'].
+  # 0.5 is the historical value; changing it changes cluster IDs and therefore
+  # every per-cluster annotation. Must be a positive number.
+  leiden_resolution: 0.5
+
+  # Optional, NON-DESTRUCTIVE resolution audit. When true, each candidate below is
+  # additionally clustered on the SAME neighbour graph into its own
+  # obs['leiden_res_<r>'] column and a diagnostics table is written to
+  #   04_clustering_and_cell_states/leiden_resolution_evaluation.csv
+  # (n_clusters, min/median/max cluster size, clusters under min_cluster_cells,
+  #  ARI + NMI vs the adjacent resolution, PCA silhouette).
+  # obs['leiden'] is NEVER overwritten and `leiden_resolution` above stays primary —
+  # nothing is auto-selected. Costs one extra Leiden run per candidate.
+  evaluate_resolutions: false
+  resolution_candidates: [0.2, 0.4, 0.5, 0.6, 0.8, 1.0]
+
+  # A cluster smaller than this is reported as too small to annotate reliably.
+  min_cluster_cells: 20
+  # Silhouette is O(n^2) in memory; above this many cells it is computed on a
+  # seeded random subsample (reproducible for a fixed seed).
+  resolution_silhouette_max_cells: 5000
+
+# -----------------------------------------------------------------------------
+# QC — cell-level filters. Defaults are the previous hard-coded constants and the
+# comparison operators are unchanged, so leaving these alone filters exactly the same
+# cells as before. A cell is KEPT only when all three hold:
+#   n_genes_by_counts > min_genes,  n_genes_by_counts < max_genes,
+#   pct_counts_mt < max_mito_percent
+# The number of cells each rule rejected is written to the run summary and manifest
+# (rules overlap, so the per-rule counts can sum to more than the total removed).
+# -----------------------------------------------------------------------------
+qc:
+  min_genes: 200            # keep cells with n_genes_by_counts > this
+  max_genes: 6000           # keep cells with n_genes_by_counts < this
+  max_mito_percent: 15.0    # keep cells with pct_counts_mt < this (0-100)
+  do_doublet_detection: true  # run Scrublet on raw counts, per sample
+  remove_doublets: true       # drop predicted doublets (false = flag only)
+
+# -----------------------------------------------------------------------------
+# ANNOTATION — quality reporting and re-run safety. None of this changes how the
+# consensus votes; it only records and surfaces uncertainty.
+# -----------------------------------------------------------------------------
+annotation:
+  # Mixed/heterogeneous cluster detection from the per-cell CellTypist labels.
+  # Flagged when the dominant label covers < 0.70 of the cluster, OR the runner-up
+  # covers >= 0.20. Advisory only: obs['mixed_cluster_flag'] + the consensus CSV.
+  mixed_cluster_min_dominant_fraction: 0.70
+  mixed_cluster_second_label_fraction: 0.20
+
+  # Whether DE/composition may key off obs['celltype_subtype'] instead of the
+  # coarse consensus. Subtypes come from ONE annotator (see celltype_subtype_source)
+  # and are not vote-validated, so keep this false unless you know you want it.
+  use_subtypes_for_downstream: false
+
+  # Re-run safety. When false (default) the consensus is ALWAYS recomputed, and a
+  # leftover single-voter column (celltype_celltypist / celltype_singler / ...) can
+  # never be promoted to the final `celltype`. Set true only to deliberately reuse a
+  # complete FINAL annotation (celltype_consensus / celltype / cell_type, or the
+  # explicit column below); the reason for reuse is logged.
+  reuse_existing_final_annotation: false
+  final_annotation_column: null
+
+# -----------------------------------------------------------------------------
+# DOWNSTREAM — which cells may carry an inferential claim.
+# -----------------------------------------------------------------------------
+downstream:
+  # Low/Review-tier clusters are ones where the annotators disagreed or the lineage
+  # gate contradicted them — their label is a hypothesis. Set true to keep them out
+  # of pseudobulk DE, cell-level DE and composition comparisons.
+  #
+  # Default is FALSE to preserve the previous behaviour exactly: turning it on
+  # legitimately CHANGES DE and composition results, so it is an explicit opt-in.
+  # Recommended: true, once you have reviewed the consensus tiers for your dataset.
+  #
+  # Cells are never deleted — they are marked obs['include_in_downstream_analysis']
+  # and remain in the h5ad, the UMAPs and every audit table. If excluding them would
+  # drop a contrast below 2 samples/group, filtering is skipped with a logged reason.
+  exclude_low_confidence_de: false
+  excluded_consensus_tiers:
+    - Low/Review
+  do_pseudobulk_de: true    # donor-level DESeq2 (the statistically correct group test)
+
+# -----------------------------------------------------------------------------
+# DE — contrast design. This block decides the SIGN of every fold change.
+# -----------------------------------------------------------------------------
+de:
+  # The CONTROL / baseline arm. Every contrast is run as focus_vs_reference, so a
+  # positive log2FoldChange always means "higher in the non-reference (case) arm".
+  #
+  # null = detect it from the group names (normal/healthy/control/baseline/untreated/
+  # pre-treatment/...). If NOTHING matches, the direction falls back to alphabetical
+  # and is therefore arbitrary — that fact is logged, written into every DE row
+  # (reference_selection) and recorded in the run manifest, but the fix is to name
+  # the arm here. Example: reference_group: CONTROL
+  reference_group: null
+
+  # Effect size is TESTED, not filtered. DESeq2 is given the formal null
+  # H0: |log2FC| <= lfc_threshold, so a gene must be significantly larger than the
+  # threshold — instead of testing against zero and then filtering |log2FC| > 1,
+  # which inflates the false-positive rate because the filter is not part of the test.
+  # Set 0 for the classic against-zero Wald test.
+  lfc_threshold: 1.0
+  alpha: 0.05               # padj cutoff for the up/down calls
+
+# -----------------------------------------------------------------------------
+# SINGLE mode — one 10x feature-barcode matrix folder
+# (folder containing matrix.mtx, barcodes.tsv, features.tsv)
+# -----------------------------------------------------------------------------
+single:
+  # Bundled demo: one real sample from the demo cohort in input_data/.
+  single_10x_dir: 'input_data/demo_cohort_GSE283500/Healthy_skin/GSM8664023_NST8_CD8skin'
+  # The study metadata JSON lives at the cohort root, so point at it explicitly
+  # (auto-detect only looks inside single_10x_dir).
+  geo_json_path: 'input_data/demo_cohort_GSE283500/GSE283500_metadata.json'
+  out_name: outputs/demo_single           # run results land under outputs/
+  sample_label: null          # null = derived from the folder name
+  group_label: null           # null, or e.g. CASE / CONTROL / TUMOR / NORMAL
+  do_groupwise_de: false      # single dataset has one group, so usually false
+  batch_key: null             # no batch correction for a single sample
+  integration_method: null    # "bbknn" or null
+
+# -----------------------------------------------------------------------------
+# MULTI mode — a <group>/<sample> tree of 10x folders, e.g.
+#   <base>/CASE/sample1/,  <base>/CASE/sample2/,  <base>/CONTROL/sample3/
+#
+# This is exactly the `analysis_input/` tree produced by the cohort tool's
+# bridge_to_analysis.py. Point multi_base_dir at that folder. If it also
+# contains a metadata.csv / group_map.csv (columns: sample, group), that file
+# is auto-detected and used as the source of truth for group assignment;
+# samples whose group is _EXCLUDED / _REVIEW / _NON_EXPRESSION are skipped.
+# ------------------------------------------------------ -----------------------
+multi:
+  # Bundled demo cohort: 2 groups x 2 real samples (Healthy_skin / Psoriasis_skin).
+  # Swap in your own cohort folder here, e.g.
+  #   multi_base_dir: 'D:\AyassBio_Workspace_Downloads\10x_sc_geo_cohort_module\benchmark_datasets\psoriasis_skin\analysis_input\GSE283500'
+  multi_base_dir: 'D:\AyassBio_Workspace_Downloads\single_cell_pipeline\single_cell_pipeline_agent_standalone\input_data\GSE212966'
+  out_name: outputs/oabcreatuccc_tissue            # run results land under outputs/
+  group_map_path: null        # null = auto-detect metadata.csv/group_map.csv in multi_base_dir
+  do_groupwise_de: true       # CASE vs CONTROL DE across the cohort (needs >=2 groups)
+  batch_key: sample           # per-sample batch correction
+  integration_method: bbknn   # "bbknn" or null
+  run_per_sample: false        # also run each sample individually (multiplies runtime)

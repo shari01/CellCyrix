@@ -1,0 +1,204 @@
+# secrets — .env holds REAL keys; .env.example holds placeholders and stays tracked
+.env
+.env.*
+!.env.example
+
+# --- python bytecode & build artefacts --------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
+build/
+dist/
+sdist/
+wheels/
+pip-wheel-metadata/
+.installed.cfg
+MANIFEST
+
+# --- virtual environments (any name: .venv, .venv312, venv, env) ------------
+.venv*/
+venv/
+env/
+ENV/
+.python-version
+
+# --- test / coverage / type-check / lint caches ------------------------------
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# --- notebook & JIT caches ---------------------------------------------------
+.ipynb_checkpoints/
+.numba_cache*/
+.uv-cache/
+__pypackages__/
+
+# --- editor / IDE / OS droppings --------------------------------------------
+.idea/
+.vscode/
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# run results (keep the folder, not its contents) — measured at 68.8 GB
+outputs/*
+!outputs/.gitkeep
+
+# large data / model / archive formats, wherever they land
+*.h5ad
+*.h5
+*.loom
+*.mtx
+*.mtx.gz
+*.npz
+*.npy
+*.pkl
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.log
+*.rds
+*.RData
+*.rda
+*.h5mu
+*.hdf5
+*.parquet
+*.feather
+*.arrow
+*.zarr/
+*.bam
+*.bai
+*.cram
+*.crai
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+# *.gz is deliberately NOT blanket-ignored: it is not a data allow-list, it just
+# means a .gz somewhere else in the tree is not silently dropped.
+
+# --- demo input data: NOT TRACKED --------------------------------------------
+# Reversed 2026-08-11 (standards Rule 17.1: commit source only, never data).
+# 39 real GEO files were tracked here — barcodes/genes .tsv.gz for GSE212966 and
+# GSE283500 plus metadata. Two problems:
+#
+#   * It is research data in a source repository, and 489 MB of it on disk.
+#   * The tracked copy was never usable anyway: matrix.mtx.gz is blanket-ignored
+#     by the *.mtx.gz rule above, so the committed demo was missing the actual
+#     count matrices. Anyone cloning got features and barcodes and no data.
+#
+# The accessions are recorded in README.md; download them from GEO into this
+# folder to run the demo. Keep the folder, not its contents.
+input_data/*
+!input_data/.gitkeep
+
+# --- bundled CellTypist models (54 MB, 41 .pkl): NOT TRACKED -----------------
+# Reversed again 2026-08-11 (standards Rule 17.3: never commit a file over ~5 MB;
+# Rule 16.3: never load a pickle you cannot verify).
+#
+#   6.2 MB   largest model (Cells_Fetal_Lung.pkl) — over the 5 MB ceiling
+#   54 MB    all 41 models together, paid by every clone
+#
+# The previous rationale for tracking them was that a `git clone` otherwise
+# shipped without them and the CellTypist voter silently downloaded all 41 on
+# first run. That problem is real, and it is now solved properly rather than by
+# committing binaries:
+#
+#   scripts/fetch_celltypist_models.py   fetches every model in the manifest and
+#                                        verifies each SHA-256 before it is kept
+#   celltype_consensus/model_integrity.py verifies again at load time, so a
+#                                        corrupt or swapped pickle raises instead
+#                                        of being unpickled
+#
+# The two small TEXT files stay tracked, because they are what makes the download
+# verifiable and reproducible: models.json (upstream URLs) and SHA256SUMS.txt
+# (expected digest + size per model). Both are excluded from the blanket ignores
+# by being .txt/.json, so no negation is needed for them.
+
+# --- note on the marker library ---------------------------------------------
+# Pruned 2026-08-06 from 2,075 files (25 MB) to the 4 that matter, after grepping
+# every read_csv/read_excel/open/glob in the tree. Pruned again 2026-08-07 to 2,
+# dropping the demo-only disease markers. What remains under
+# single_cell_pipeline_agent_datasets/ and why:
+#
+#   TIS_CELL_markers_v3/master_celltype_markers_long.csv   read every run
+#                                                          (lineage_panels.py:79)
+#   its README.md                                          data provenance
+#
+# Deleted: cell_markers_db_2.0/, human_azimuth_reference_csvs/, panglo_db/,
+# celltype_markers_top50/, subtype_ref/, the unread remainder of
+# TIS_CELL_markers_v3/, and all of Disease_specific_markers/ — the squamous-cell
+# CSV was read only by tests/annotation_reference_demo.py, which nothing calls.
+# All of it is still in the repo-root Celltype_Markers_References/ library if it
+# is ever needed again.
+# Nothing above is git-ignored — both files are small and MUST stay tracked.
+
+# PubMed retrieval cache (regenerated on demand, keyed by query hash).
+# BOTH spellings are real: run_pubmed_annotation() writes <out_dir>/_pubmed_cache,
+# while PubMedAnnotationConfig's own default is a CWD-relative .pubmed_cache, which
+# is what you get when a script or notebook builds the config directly.
+_pubmed_cache/
+.pubmed_cache/
+
+# benchmark run artifacts (regenerated by tests/benchmarks/run_benchmarks.py)
+tests/benchmarks/outputs/
+tests/benchmarks/logs/
+tests/benchmarks/benchmark_results.json
+tests/benchmarks/BENCHMARK_REPORT.md
+
+# ============================================================================
+# Unused / irrelevant to the code — verified 2026-08-07 by grepping every
+# read_csv/read_excel/open/glob/import in agentic_ai_wf/, tests/ and main.py.
+# shared_reference/ is deliberately NOT touched here: it IS read every run
+# (lineage_panels.py resolves the TIS_CELL table and the 41 CellTypist models
+# out of it) and its negations above must keep working.
+# ============================================================================
+
+# Duplicate of the code now living at the repo root. `diff -rq` shows the shared
+# files are byte-identical; keeping both would publish the same package twice.
+single_cell_pipeline_agent_standalone/
+
+# 30 MB / 2,106 files, and the code never reads it. lineage_panels.py:117 lists
+# it only as a LEGACY fallback that never fires — tis_cell_marker_table()
+# resolves to shared_reference/ first. The only other mention is
+# tests/annotation_reference_demo.py, which nothing calls.
+Celltype_Markers_References/
+
+# Internal planning tracker — not code, not read by anything.
+BiRAGAS_One_Week_Execution_Tracker*.xlsx
+
+# Captured CLI output from a manual run.
+test_run_cli.txt
+
+# --- docs/: prose stays tracked, generated binaries do not -------------------
+# No file under docs/ is read by the pipeline. The .md documentation is worth
+# versioning; the decks, spreadsheets and rendered PNGs are regenerated
+# artifacts that bloat the history. Remove a line here to publish one.
+docs/*.pptx
+docs/*.xlsx
+docs/*.png
+docs/figures/
+docs/Module-linkage/
+
+# Bundled external repo — a separate superset project (bulk cohort DE + CAR-T),
+# not this pipeline's code. Was ignored before the root .gitignore was replaced;
+# restored here so it does not get published from this repo.
+Oncocyrix_MultiCohort-master/

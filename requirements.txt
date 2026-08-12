@@ -1,0 +1,150 @@
+# Single-cell 10x pipeline — standalone module.
+# Pinned to the versions this pipeline is verified against (Python >= 3.11; 3.12 used).
+#     python -m pip install -r requirements.txt
+#     python -m playwright install chromium     # only needed for PDF report export
+
+# --- config / entry point -----------------------------------------------------
+PyYAML==6.0.3
+python-dotenv==1.2.2
+python-decouple==3.8
+
+# --- scanpy / scientific stack ------------------------------------------------
+anndata==0.12.7
+scanpy==1.11.5
+numpy==2.3.5
+pandas==2.3.3
+scipy==1.16.3
+scikit-learn==1.8.0
+scikit-image==0.26.0
+scikit-misc==0.5.2
+statsmodels==0.14.6
+matplotlib==3.10.8
+seaborn==0.13.2
+h5py==3.15.1
+zarr==3.1.5
+numba==0.63.1
+llvmlite==0.46.0
+Cython==3.2.3
+openpyxl==3.1.5
+natsort==8.4.0
+networkx==3.6.1
+patsy==1.0.2
+session-info2==0.3
+legacy-api-wrap==1.5
+array-api-compat==1.13.0
+numcodecs==0.16.5
+donfig==0.8.1.post1
+imageio==2.37.4
+tifffile==2026.7.14
+lazy-loader==0.5
+
+# --- clustering / neighbours / integration ------------------------------------
+leidenalg==0.11.0
+igraph==1.0.0
+texttable==1.7.0
+umap-learn==0.5.9.post2
+pynndescent==0.5.13
+annoy==1.17.3
+bbknn==1.6.0
+
+# --- differential expression --------------------------------------------------
+pydeseq2==0.5.4
+
+# --- cell-type annotation voters ----------------------------------------------
+celltypist==1.7.1          # CellTypist ML voter
+rpy2==3.6.4                # SingleR voter bridge (also needs R + SingleR + celldex + scrapper)
+rpy2-rinterface==3.6.3
+rpy2-robjects==3.6.3
+
+# --- PubMed literature voter (RAG) --------------------------------------------
+sentence-transformers==5.2.0
+faiss-cpu==1.13.2
+torch==2.9.1
+transformers==4.57.3
+tokenizers==0.22.1
+safetensors==0.7.0
+huggingface-hub==0.36.0
+regex==2025.11.3
+
+# --- pathway enrichment / gene naming -----------------------------------------
+gseapy==1.1.11
+mygene==3.2.2
+biothings_client==0.4.1
+
+# --- LLM layer (agentic_ai_wf.llm) + HTML/PDF report --------------------------
+openai==2.45.0
+openai-agents==0.18.2      # imported by agentic_ai_wf.llm and the module's agent wrapper
+pydantic==2.13.4
+requests==2.32.5
+httpx==0.28.1
+httpcore==1.0.9
+h11==0.16.0
+anyio==4.12.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+playwright==1.61.0         # HTML -> PDF report export
+
+# --- support / transitive pins ------------------------------------------------
+certifi==2026.1.4
+cffi==2.0.0
+charset-normalizer==3.4.4
+click==8.3.1
+colorama==0.4.6
+contourpy==1.3.3
+cycler==0.12.1
+et_xmlfile==2.0.0
+filelock==3.20.2
+fonttools==4.61.1
+fsspec==2025.12.0
+google-crc32c==1.8.0
+idna==3.11
+joblib==1.5.3
+kiwisolver==1.4.9
+mpmath==1.3.0
+packaging==25.0
+pillow==12.1.0
+pycparser==2.23
+pyparsing==3.3.1
+python-dateutil==2.9.0.post0
+pytz==2025.2
+setuptools==80.9.0
+six==1.17.0
+sympy==1.14.0
+threadpoolctl==3.6.0
+tqdm==4.67.1
+typing_extensions==4.15.0
+tzdata==2025.3
+tzlocal==5.3.1
+urllib3==2.6.2
+wheel==0.45.1
+
+# =============================================================================
+# DELIBERATELY NOT PINNED HERE
+# -----------------------------------------------------------------------------
+# An import-vs-requirements audit of the package finds 32 third-party top-level
+# imports, and every one a pipeline run reaches is pinned above. Six names come
+# back unpinned; all six are correct as they are, recorded here so nobody
+# "fixes" the list by installing something the pipeline does not use:
+#
+#   figure_style, marker_stats   NOT packages. rank_genes_subprocess.py is
+#                                executed as a standalone script by
+#                                subprocess.run, where relative imports do not
+#                                resolve, so it imports these two siblings flat.
+#
+#   langchain_core,              Imported only by llm/langchain_llm.py and
+#   langchain_openai             llm/langchain_callbacks.py, which nothing in the
+#                                pipeline references — LLM-layer leftovers. The
+#                                pipeline talks to OpenRouter through
+#                                llm/clients.py and celltype_consensus/agent.py.
+#
+#   core, django                 Inside a try/except in llm/llm_usage_logger.py:
+#                                optional tenant-audit logging for the Django
+#                                host application. Absent here by design; the
+#                                except path is the normal one.
+#
+# Documentation build tools (python-pptx, pywin32) are also absent on purpose:
+# they generate docs/, they are not needed to run or test the pipeline.
+#
+# Re-run the audit after adding an import:
+#   python -c "import ast,pathlib,sys;..."   (see docs/PIPELINE_MASTER_DOCUMENTATION.md §24)
+# =============================================================================
