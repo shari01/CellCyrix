@@ -74,6 +74,22 @@ def _get_float(name: str, default: float) -> float:
         return default
 
 
+def _get_bool(name: str, default: bool) -> bool:
+    """Read a boolean env var. Accepts 1/0, true/false, yes/no, on/off (any case)."""
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    text = str(raw).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    logger.warning(
+        "[CONFIG] %s=%r is not a boolean; using default %s.", name, raw, default
+    )
+    return default
+
+
 @dataclass
 class ConsensusConfig:
     """Immutable-ish configuration bag passed to tools and the agent layer.
@@ -106,6 +122,23 @@ class ConsensusConfig:
     enable_pubmed: bool = (
         False  # literature (PubMed RAG) voter; needs network + OpenRouter
     )
+
+    # --- mixed-cluster refinement ---
+    # The consensus emits ONE label per cluster, so a cluster holding several cell types
+    # can only be given one of them. CellTypist's heterogeneity metrics already detect
+    # that case (mixed_cluster_flag); with this on, those clusters are split and the
+    # voters run on the sub-clusters instead of on the merged group.
+    #
+    # Measured motivation: on a lung cohort 8 of 12 clusters were flagged mixed, and one
+    # of them held 2,852 smooth-muscle cells, 650 myofibroblasts and 532 neurons under a
+    # single "Airway smooth muscle cell" label.
+    #
+    # Costs extra per-cluster voter calls (one per new sub-cluster), which is what
+    # refine_max_new_clusters bounds.
+    refine_mixed_clusters: bool = True
+    refine_resolution: float = 0.30
+    refine_min_subcluster_cells: int = 30
+    refine_max_new_clusters: int = 24
 
     # Biology context (disease-agnostic)
     tissue: Optional[str] = None
@@ -225,6 +258,10 @@ def load_config(
         llm_max_tokens=_get_int("LLM_MAX_TOKENS", 800),
         llm_top_p=_get_float("LLM_TOP_P", 1.0),
         llm_seed=_get_int("LLM_SEED", 0),
+        refine_mixed_clusters=_get_bool("REFINE_MIXED_CLUSTERS", True),
+        refine_resolution=_get_float("REFINE_RESOLUTION", 0.30),
+        refine_min_subcluster_cells=_get_int("REFINE_MIN_SUBCLUSTER_CELLS", 30),
+        refine_max_new_clusters=_get_int("REFINE_MAX_NEW_CLUSTERS", 24),
         enable_celltypist=enable_celltypist,
         enable_llm=enable_llm,
         enable_singler=enable_singler,

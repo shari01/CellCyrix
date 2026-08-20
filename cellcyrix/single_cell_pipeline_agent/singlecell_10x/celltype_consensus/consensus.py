@@ -25,7 +25,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from . import tools
+from . import cluster_refinement, tools
 from .agent import (
     OpenRouterError,
     llm_adjudicate,
@@ -388,10 +388,96 @@ def run_consensus_annotation(
                 1 for m in ct_metrics.values() if m.get("mixed_cluster_flag")
             )
             _log(
-                "[CONSENSUS] CellTypist flagged %s/%s cluster(s) as mixed/heterogeneous (advisory only; the consensus label is unchanged).",
+                "[CONSENSUS] CellTypist flagged %s/%s cluster(s) as mixed/heterogeneous.",
                 _n_mixed,
                 len(ct_metrics),
             )
+
+            # -- Stage 3b: act on the mixed flags -------------------------------
+            # Until this existed the flags were advisory and nothing consumed them, so a
+            # cluster holding three cell types still received one label. Splitting the
+            # flagged clusters and re-running CellTypist's per-cluster aggregation on the
+            # sub-clusters is what lets the remaining voters see inside them.
+            if _n_mixed and bool(getattr(cfg, "refine_mixed_clusters", False)):
+                try:
+                    _sizes = (
+                        adata.obs[cfg.cluster_col].astype(str).value_counts().to_dict()
+                    )
+                    _flagged = cluster_refinement.mixed_cluster_ids(
+                        ct_metrics, cluster_sizes=_sizes
+                    )
+                    _report = cluster_refinement.refine_mixed_clusters(
+                        adata,
+                        cluster_col=cfg.cluster_col,
+                        mixed_clusters=_flagged,
+                        resolution=float(getattr(cfg, "refine_resolution", 0.30)),
+                        min_subcluster_cells=int(
+                            getattr(cfg, "refine_min_subcluster_cells", 30)
+                        ),
+                        max_new_clusters=int(
+                            getattr(cfg, "refine_max_new_clusters", 24)
+                        ),
+                    )
+                    resolved["cluster_refinement"] = _report
+                    if _report.get("refined"):
+                        # Every voter from here on keys off cfg.cluster_col, so pointing
+                        # it at the refined column is the whole switch. The refined column
+                        # is also copied onto adata_ln, which the voters actually read.
+                        _refined_col = str(_report["column"])
+                        adata_ln.obs[_refined_col] = (
+                            adata.obs[_refined_col].astype(str).to_numpy()
+                        )
+                        cfg.cluster_col = _refined_col
+                        clusters = sorted(
+                            adata.obs[_refined_col].astype(str).unique(),
+                            key=tools._natural_key,
+                        )
+                        _log(
+                            "[CONSENSUS] refined %s mixed cluster(s); voting now runs on "
+                            "%s clusters (was %s).",
+                            _report["n_split"],
+                            _report["n_clusters_after"],
+                            _report["n_clusters_before"],
+                        )
+                        # Re-aggregate CellTypist on the refined clusters: the per-cell
+                        # labels are unchanged, only the grouping is, so this is a cheap
+                        # recount and NOT a second model run.
+                        ct_raw, ct_metrics = tools.annotate_celltypist_detailed(
+                            adata_ln,
+                            cluster_col=cfg.cluster_col,
+                            model_name=ct_model,
+                            min_dominant_fraction=float(
+                                getattr(
+                                    cfg, "mixed_cluster_min_dominant_fraction", 0.70
+                                )
+                            ),
+                            second_label_fraction=float(
+                                getattr(
+                                    cfg, "mixed_cluster_second_label_fraction", 0.20
+                                )
+                            ),
+                        )
+                        _log(
+                            "[CONSENSUS] post-refinement CellTypist: %s/%s cluster(s) "
+                            "still mixed.",
+                            sum(
+                                1
+                                for m in ct_metrics.values()
+                                if m.get("mixed_cluster_flag")
+                            ),
+                            len(ct_metrics),
+                        )
+                except Exception as exc:  # noqa: BLE001 - refinement must never lose a run
+                    _log(
+                        "[CONSENSUS] cluster refinement failed (%s); continuing on the "
+                        "original clusters.",
+                        exc,
+                        level=logging.WARNING,
+                    )
+                    resolved["cluster_refinement"] = {
+                        "refined": False,
+                        "error": repr(exc),
+                    }
     else:
         _log("[CONSENSUS] CellTypist voter disabled (enable_celltypist=False).")
 

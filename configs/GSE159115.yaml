@@ -1,0 +1,66 @@
+annotation:
+  final_annotation_column: null
+  mixed_cluster_min_dominant_fraction: 0.7
+  mixed_cluster_second_label_fraction: 0.2
+  reuse_existing_final_annotation: false
+  use_subtypes_for_downstream: false
+clustering:
+  evaluate_resolutions: false
+  leiden_resolution: 0.5
+  min_cluster_cells: 20
+  resolution_candidates:
+  - 0.2
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.8
+  - 1.0
+  resolution_silhouette_max_cells: 5000
+common:
+  celltypist_model: auto
+  cleanup_dedup_logs: true
+  cleanup_per_cluster_marker_csvs: true
+  cleanup_pipeline_log: false
+  cleanup_raw_pathway_csvs: true
+  do_dpt: false
+  do_pathway_clustering: false
+  dpt_root_group: auto
+  enable_celltypist: true
+  enable_knowledge_based: true
+  enable_pubmed: true
+  enable_singler: true
+  generate_report: false
+  geo_json_path: null
+  logos_dir: null
+  prepare_for_bisque: false
+  singler_reference: auto
+  skip_pca_cluster_plots: true
+  skip_per_celltype_csvs: true
+  skip_per_celltype_plots: true
+  skip_per_cluster_marker_csvs: true
+  skip_tsne: true
+  species: human
+  tissue: kidney
+de:
+  alpha: 0.05
+  lfc_threshold: 1.0
+  reference_group: normal
+downstream:
+  do_pseudobulk_de: true
+  exclude_low_confidence_de: false
+  excluded_consensus_tiers: []
+mode: multi
+multi:
+  batch_key: sample
+  do_groupwise_de: true
+  group_map_path: null
+  integration_method: bbknn
+  multi_base_dir: D:/AyassBio_Workspace_Downloads/10x_sc_geo_cohort_module/input_data/GSE159115
+  out_name: GSE159115
+  run_per_sample: false
+qc:
+  do_doublet_detection: true
+  max_genes: 6000
+  max_mito_percent: 50.0
+  min_genes: 200
+  remove_doublets: false

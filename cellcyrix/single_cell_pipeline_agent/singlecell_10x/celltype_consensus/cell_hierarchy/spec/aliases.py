@@ -40,6 +40,8 @@ SOURCES = (
     "panglaodb",
     "sctype",
     "cell_ontology",
+    "pipeline_subtype",
+    "celltypist_lung_atlas",
     "generic",
 )
 
@@ -1214,3 +1216,164 @@ _CELL_ONTOLOGY_ALIASES: Dict[str, List[str]] = {
 
 for _node, _labels in _CELL_ONTOLOGY_ALIASES.items():
     ALIASES.setdefault(_node, {}).setdefault("cell_ontology", []).extend(_labels)
+
+
+# ---------------------------------------------------------------------------
+# pipeline_subtype — the labels THIS pipeline writes into `celltype_subtype`.
+#
+# Added after a subtype-level benchmark showed the resolver could not read 32% of the
+# pipeline's own output: "classical monocyte (CD14+)", "cytotoxic effector CD8+ T cell"
+# and "CD1C-positive conventional dendritic cell (cDC2)" all resolved to unknown_cell.
+# The parenthetical marker suffix is what defeats normalisation, and a tool that cannot
+# parse its own vocabulary cannot score itself or be joined against anything.
+#
+# "naive T cell" is here for a different and worse reason: with no alias it fell through
+# to the fuzzy matcher, which resolved it to `naive_b_cell` at ratio 0.55 — one character
+# of edit distance between two unrelated lineages, affecting 11,386 cells in a single
+# run. `_lineage_compatible` in resolver.py now blocks that class of error outright; the
+# explicit alias below makes the correct answer exact rather than merely non-wrong.
+# It maps to the T-cell parent, not to a CD4/CD8 subtype, because the label does not say.
+_PIPELINE_SUBTYPE_ALIASES: Dict[str, List[str]] = {
+    "t_cell": ["naive T cell", "naive T cells"],
+    "classical_monocyte": [
+        "classical monocyte (CD14+)",
+        "classical monocyte (CD14-positive)",
+    ],
+    "cd8_effector_memory_t_cell": [
+        "cytotoxic effector CD8+ T cell",
+        "cytotoxic effector CD8-positive T cell",
+    ],
+    "conventional_dc2": [
+        "CD1C-positive conventional dendritic cell (cDC2)",
+        "CD1c-positive conventional dendritic cell (cDC2)",
+        "cDC2",
+    ],
+    "conventional_dc1": ["CD141-positive conventional dendritic cell (cDC1)", "cDC1"],
+}
+
+for _node, _labels in _PIPELINE_SUBTYPE_ALIASES.items():
+    ALIASES.setdefault(_node, {}).setdefault("pipeline_subtype", []).extend(_labels)
+
+
+# ---------------------------------------------------------------------------
+# cell_ontology, part 2 — STRUCTURAL and stromal types.
+#
+# The first cell_ontology block covered immune labels, which is where this hierarchy's
+# coverage was always strongest. Running a lung cohort exposed the other half: 26 of 77
+# truth types were unresolvable, 48,352 of 70,094 cells, and the benchmark silently
+# scored a 31% subset.
+#
+# Almost all of it is one pattern. Cell Ontology qualifies a structural type by anatomy
+# — "fibroblast of lung", "pulmonary interstitial fibroblast", "epithelial cell of lung",
+# "tracheobronchial smooth muscle cell" — and the tree holds the unqualified type. The
+# qualifier is what defeats the match, not the biology.
+#
+# These map to the type the tree actually has, never to an invented tissue-specific node.
+# Losing "of lung" is a real loss of information, but a resolvable coarse call beats an
+# unresolvable precise one, and the raw label is preserved in the output regardless.
+_CELL_ONTOLOGY_STRUCTURAL: Dict[str, List[str]] = {
+    # --- fibroblast / stromal ---
+    "fibroblast": [
+        "fibroblast of lung",
+        "bronchus fibroblast of lung",
+        "fibroblast of connective tissue",
+        "connective tissue cell",
+    ],
+    "alveolar_fibroblast": ["pulmonary interstitial fibroblast"],
+    "adventitial_fibroblast": ["adventitial cell"],
+    "myofibroblast": ["myofibroblast cell"],
+    # --- epithelium ---
+    "epithelial": [
+        "epithelial cell of lung",
+        "respiratory tract epithelial cell",
+        "epithelial cell of alveolus of lung",
+    ],
+    "airway_epithelial_cell": ["bronchial epithelial cell", "lung epithelial cell"],
+    "ciliated_cell_airway": [
+        "lung multiciliated epithelial cell",
+        "multiciliated cell",
+        "ciliated columnar cell of tracheobronchial tree",
+        "lung ciliated cell",
+    ],
+    "club_cell": ["club cell of lung", "secretory cell of lung"],
+    "alveolar_type_1_cell": ["pulmonary alveolar type 1 cell", "type I pneumocyte"],
+    "alveolar_type_2_cell": ["pulmonary alveolar type 2 cell", "type II pneumocyte"],
+    # --- smooth muscle ---
+    "airway_smooth_muscle_cell": ["tracheobronchial smooth muscle cell"],
+    "vascular_smooth_muscle_cell": [
+        "vascular associated smooth muscle cell",
+        "smooth muscle cell of the pulmonary artery",
+    ],
+    "muscle": ["smooth muscle cell", "myocyte"],
+    # --- endothelium ---
+    "lymphatic_endothelial_cell": [
+        "endothelial cell of lymphatic vessel",
+        "lung lymphatic endothelial cell",
+    ],
+    "arterial_endothelial_cell": ["endothelial cell of artery", "arterial cell"],
+    "capillary_endothelial_cell": ["lung microvascular endothelial cell"],
+    "endothelial": [
+        "endothelial cell of vascular tree",
+        "blood vessel endothelial cell",
+    ],
+    # --- glia ---
+    "non_myelinating_schwann_cell": ["Schwann cell precursor"],
+    "glial_cell": ["glial cell of the peripheral nervous system"],
+    # --- B-cell development. The tree has pro-B and pre-B but not the CL sub-stages;
+    # they map to the stage the tree models rather than to invented nodes.
+    "pre_b_cell": [
+        "precursor B cell",
+        "large pre-B-II cell",
+        "small pre-B-II cell",
+        "pre-B-II cell",
+    ],
+    "pro_b_cell": ["late pro-B cell", "early pro-B cell"],
+    "b_cell": ["B-1a B cell", "B-1b B cell", "B-1 B cell"],
+    # --- other ---
+    "nkt_cell": ["mature NK T cell"],
+    "erythrocyte": ["primitive red blood cell", "nucleated erythrocyte"],
+}
+
+for _node, _labels in _CELL_ONTOLOGY_STRUCTURAL.items():
+    ALIASES.setdefault(_node, {}).setdefault("cell_ontology", []).extend(_labels)
+
+
+# ---------------------------------------------------------------------------
+# celltypist_lung_atlas — labels emitted by Human_Lung_Atlas.pkl, plus two strays.
+#
+# Added after a lung cohort left 25% of CellTypist's calls (17,765 cells) and 11% of
+# SingleR's (8,013) unresolvable. That is not a cosmetic problem: an unresolved
+# prediction is scored as an error, so both baselines were being penalised for vocabulary
+# the tree lacked rather than for biology, and the benchmark's own confound guard flagged
+# them. A comparison that handicaps the competition is worse than no comparison.
+_LUNG_ATLAS_ALIASES: Dict[str, List[str]] = {
+    "suprabasal_cell_airway": ["Suprabasal", "Suprabasal cell", "Suprabasal (nasal)"],
+    "interstitial_macrophage": [
+        "Interstitial Mph perivascular",
+        "Interstitial macrophage perivascular",
+        "Interstitial Mph",
+    ],
+    "club_cell": ["Club (nasal)", "Club (non-nasal)", "Club"],
+    "ciliated_cell_airway": [
+        "Multiciliated (non-nasal)",
+        "Multiciliated (nasal)",
+        "Multiciliated",
+    ],
+}
+
+for _node, _labels in _LUNG_ATLAS_ALIASES.items():
+    ALIASES.setdefault(_node, {}).setdefault("celltypist_lung_atlas", []).extend(
+        _labels
+    )
+
+
+# "Proliferating cell" is a cell STATE, not an identity, and the tree models states on a
+# separate axis on purpose (spec/states.py). It has no identity node and must not be
+# forced onto one — mapping it to any lineage would assert biology the label does not
+# carry. It stays unresolved, which scores it as an error, and that is the correct
+# outcome: as an answer to "what cell is this", it is not one.
+#
+# "iPS_cells" is SingleR's Human Primary Cell Atlas reference leaking a cultured-cell
+# class into a primary-tissue run. Also deliberately unmapped: there is no induced
+# pluripotent stem cell in a healthy adult lung, so a hit is a reference artefact and
+# should be visible as unresolved rather than silently absorbed into a real type.

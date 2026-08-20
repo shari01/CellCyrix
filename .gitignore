@@ -227,3 +227,77 @@ docs/Module-linkage/
 # not this pipeline's code. Was ignored before the root .gitignore was replaced;
 # restored here so it does not get published from this repo.
 Oncocyrix_MultiCohort-master/
+
+# ============================================================================
+# Saved JOSS submission-requirement web pages — reference material, not source.
+# Three "Save page as" captures (HTML + their *_files/ asset trees, ~4 MB, and
+# the asset dirs nest duplicate copies of each other). Read them locally; the
+# canonical versions live at joss.readthedocs.io.
+# ============================================================================
+JOS_JOURNEL-REQ/
+
+# ============================================================================
+# Large-file backstop — extends the data/model/archive block above (Rule 17.3:
+# never commit a file over ~5 MB). Anything matching here is a build product, a
+# model weight, a compressed archive, or media: regenerable or re-downloadable,
+# so it belongs in a data deposit, not in git history.
+# ============================================================================
+
+# archives not already covered
+*.tgz
+*.bz2
+*.xz
+*.tar.bz2
+*.tar.xz
+*.gz.tmp
+
+# model weights / serialised estimators
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.joblib
+*.pb
+*.tflite
+
+# embedded databases & caches
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+
+# genomics formats not already covered
+*.sam
+*.vcf
+*.vcf.gz
+*.bcf
+*.bigwig
+*.bw
+*.bigbed
+*.bb
+*.2bit
+*.fa
+*.fasta
+*.fa.gz
+*.fasta.gz
+*.h5seurat
+
+# imaging / media
+*.tif
+*.tiff
+*.nii
+*.nii.gz
+*.svs
+*.ndpi
+*.czi
+*.dcm
+*.mp4
+*.mov
+*.avi
+*.webm
+
+# OS / installer blobs
+*.iso
+*.dmg
+*.msi

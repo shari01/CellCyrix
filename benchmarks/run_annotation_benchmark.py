@@ -92,14 +92,24 @@ VOTER_COLUMNS = (
     "celltype_pubmed",
 )
 
-#: The pipeline's own consensus call.
+#: The pipeline's own consensus call. Deliberately COARSE — the lineage gate collapses
+#: to a conservative identity, so at fine granularity this column is not the pipeline's
+#: answer and scoring it there understates the pipeline badly.
 CONSENSUS_COLUMN = "celltype_consensus"
+
+#: The pipeline's fine-grained call, carried in its own column so a single-annotator
+#: subtype is never promoted to the main label. It IS the pipeline's answer at subtype
+#: granularity, so it must be scored alongside the consensus or a subtype-level
+#: comparison comes out meaningless: `celltype_consensus` harmonises to one label at that
+#: level and scores ~0, which reads as failure rather than as "wrong column".
+SUBTYPE_COLUMN = "celltype_subtype"
 
 #: Per-cell confidence columns, by method, used to rank calls for the risk-coverage
 #: curve. Only the consensus carries one natively; a baseline without a confidence
 #: gets a flat curve, which is the honest representation of "it cannot abstain".
 CONFIDENCE_COLUMNS = {
     CONSENSUS_COLUMN: "celltype_subtype_confidence",
+    SUBTYPE_COLUMN: "celltype_subtype_confidence",
 }
 
 #: Ordered tiers, mapped to a numeric confidence when the float column is absent.
@@ -232,6 +242,8 @@ def run_benchmark(
     methods = list(voters)
     if CONSENSUS_COLUMN in obs.columns:
         methods.append(CONSENSUS_COLUMN)
+    if SUBTYPE_COLUMN in obs.columns:
+        methods.append(SUBTYPE_COLUMN)
     methods += [column for column in extra_methods if column in obs.columns]
 
     missing_extra = [column for column in extra_methods if column not in obs.columns]
@@ -339,7 +351,13 @@ def run_benchmark(
         comparison_rows.append(
             {
                 "method": method,
-                "kind": "consensus" if method == CONSENSUS_COLUMN else "single_voter",
+                "kind": (
+                    "consensus"
+                    if method == CONSENSUS_COLUMN
+                    else "consensus_subtype"
+                    if method == SUBTYPE_COLUMN
+                    else "single_voter"
+                ),
                 **stats,
                 "unresolved_predictions": int((scored[method] == UNRESOLVED).sum()),
             }

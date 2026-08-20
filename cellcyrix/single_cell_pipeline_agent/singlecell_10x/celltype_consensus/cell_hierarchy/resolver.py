@@ -279,6 +279,65 @@ UNRESOLVED_NODE = "unknown_cell"
 UNASSIGNED_ROOT = "unassigned"
 
 
+#: Mutually exclusive lineage markers. A fuzzy match that swaps one for another is
+#: always wrong, however small the edit distance: these are different cell lineages, not
+#: spelling variants. Each entry is (canonical marker, the token forms that imply it).
+_LINEAGE_MARKERS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    ("t", ("t cell", "t cells", "t lymphocyte", "tcell")),
+    ("b", ("b cell", "b cells", "b lymphocyte", "bcell")),
+    ("nk", ("nk cell", "nk cells", "natural killer")),
+    ("myeloid", ("monocyte", "macrophage", "dendritic", "granulocyte", "neutrophil")),
+    ("erythroid", ("erythrocyte", "erythroid", "megakaryocyte", "platelet")),
+)
+
+
+def _lineage_of(text: str) -> Optional[str]:
+    """The lineage marker a normalised label carries, or None when it carries none.
+
+    Args:
+        text: A normalised label.
+
+    Returns:
+        The canonical marker, or None if the label names no lineage (in which case a
+        fuzzy match against it cannot cross one).
+    """
+    # Compound labels ("T/NK cells", "B & plasma") name more than one lineage, so they
+    # constrain nothing and must stay permissive. Substring matching alone misses this:
+    # "t/nk cells" contains "nk cell" but not "t cell", so it would look like a pure NK
+    # label and wrongly block a T-cell candidate. Splitting the joiners apart first is
+    # what exposes the bare "t".
+    words = set(re.split(r"[^a-z0-9]+", text))
+    bare = {marker for marker, _tokens in _LINEAGE_MARKERS if marker in words}
+
+    found = {
+        marker
+        for marker, tokens in _LINEAGE_MARKERS
+        if any(token in text for token in tokens)
+    } | bare
+    return found.pop() if len(found) == 1 else None
+
+
+def _lineage_compatible(probe: str, candidate: str) -> bool:
+    """Whether a fuzzy candidate may stand for `probe` without changing lineage.
+
+    Args:
+        probe: The normalised query label.
+        candidate: A normalised candidate key from the fuzzy index.
+
+    Returns:
+        False only when both name a lineage AND the lineages differ. Silence on either
+        side is permissive — this rejects known-wrong matches, it does not require every
+        label to declare a lineage.
+    """
+    probe_lineage = _lineage_of(probe)
+    if probe_lineage is None:
+        return True
+    candidate_lineage = _lineage_of(candidate)
+    if candidate_lineage is None:
+        return True
+    return probe_lineage == candidate_lineage
+
+
 @dataclass
 class Resolution:
     """One input label in, one Resolution out. Always."""
@@ -693,6 +752,13 @@ class CellHierarchy:
         close = difflib.get_close_matches(
             probe, self._fuzzy_keys, n=3, cutoff=self.fuzzy_threshold
         )
+        # Never let an edit-distance match cross a lineage. "naive t cell" and
+        # "naive b cell" differ by ONE character and score 0.55 similarity, so the fuzzy
+        # matcher happily resolved every naive T cell in a cohort to naive_b_cell —
+        # 11,386 cells in one real run, silently, with no warning. Edit distance has no
+        # concept of B versus T; this does. A candidate carrying a different lineage
+        # marker than the query is discarded rather than ranked.
+        close = [key for key in close if _lineage_compatible(probe, key)]
         if close:
             bucket = self._norm_index[close[0]]
             node_id, note = self._pick(bucket, tissue)

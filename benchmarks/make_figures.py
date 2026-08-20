@@ -79,6 +79,7 @@ DISPLAY_NAMES = {
     "celltype_singler": "SingleR",
     "celltype_knowledge_based": "LLM markers",
     "celltype_pubmed": "PubMed",
+    "celltype_subtype": "CellCyrix subtype",
     "celltype_azimuth": "Azimuth",
     "celltype_gptcelltype": "GPTCelltype",
 }
