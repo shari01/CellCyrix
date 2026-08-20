@@ -11,6 +11,8 @@ Run:  python scripts/make_input_format_figure.py
 
 from __future__ import annotations
 
+import logging
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -19,6 +21,8 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyArrowPatch, Rectangle  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 # House palette — matches the other figures in docs/figures/.
 NAVY = "#14304d"
@@ -34,7 +38,9 @@ MUTED = "#6b7a88"
 
 MONO = "DejaVu Sans Mono"
 
-OUT_PATH = Path(__file__).resolve().parents[1] / "docs" / "figures" / "input_formats.png"
+OUT_PATH = (
+    Path(__file__).resolve().parents[1] / "docs" / "figures" / "input_formats.png"
+)
 
 
 def box(ax, x, y, w, h, edge, fill, lw=2.0, zorder=2):
@@ -112,7 +118,9 @@ def build() -> plt.Figure:
         ),
     ]
     tops = [76.0, 60.0, 44.0]
-    for (name, meaning, alt), top in zip(files, tops):
+    # strict=True: the two lists are hand-maintained side by side, so a mismatch is an
+    # editing error that should raise rather than silently drop the last file's box.
+    for (name, meaning, alt), top in zip(files, tops, strict=True):
         box(ax, 4, top - 13, 50, 13, NAVY, NAVY_FILL)
         ax.text(
             7,
@@ -158,7 +166,9 @@ def build() -> plt.Figure:
 
     # single mode
     box(ax, 62, 63, 62, 20, NAVY, "white")
-    ax.text(65, 80.0, "SINGLE MODE", fontsize=10, fontweight="bold", color=NAVY, va="center")
+    ax.text(
+        65, 80.0, "SINGLE MODE", fontsize=10, fontweight="bold", color=NAVY, va="center"
+    )
     ax.text(
         65,
         76.3,
@@ -183,7 +193,9 @@ def build() -> plt.Figure:
 
     # multi mode
     box(ax, 62, 20, 62, 38, TEAL, "white")
-    ax.text(65, 54.6, "MULTI MODE", fontsize=10, fontweight="bold", color=TEAL, va="center")
+    ax.text(
+        65, 54.6, "MULTI MODE", fontsize=10, fontweight="bold", color=TEAL, va="center"
+    )
     ax.text(
         65,
         50.8,
@@ -379,11 +391,17 @@ def build() -> plt.Figure:
 
 
 def main() -> None:
+    # Rule 9 is "logging, never print()", with no production exemptions — including in
+    # this developer utility. basicConfig is safe here because a figure script owns its
+    # whole process and inherits no handlers, unlike the pipeline entry points.
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s: %(message)s", stream=sys.stdout
+    )
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     fig = build()
     fig.savefig(OUT_PATH, dpi=110, facecolor="white", bbox_inches="tight")
     plt.close(fig)
-    print(f"wrote {OUT_PATH}")
+    logger.info("wrote %s", OUT_PATH)
 
 
 if __name__ == "__main__":

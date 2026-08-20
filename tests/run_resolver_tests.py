@@ -28,7 +28,7 @@ _PKG_ROOT = _HERE.parent
 # `cell_hierarchy` lives with the module that consumes it, not at the repo root.
 _CH_PARENT = (
     _PKG_ROOT
-    / "agentic_ai_wf"
+    / "cellcyrix"
     / "single_cell_pipeline_agent"
     / "singlecell_10x"
     / "celltype_consensus"

@@ -99,15 +99,15 @@ MULTI_ANALYSIS_NAME = "combined_all_samples"  # fixed by main_multi.run_pipeline
 # --------------------------------------------------------------------------- #
 def _find_repo_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "agentic_ai_wf").is_dir():
+        if (p / "cellcyrix").is_dir():
             return p
-    raise RuntimeError("repo root with 'agentic_ai_wf' not found")
+    raise RuntimeError("repo root with 'cellcyrix' not found")
 
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-PKG = "agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x"
+PKG = "cellcyrix.single_cell_pipeline_agent.singlecell_10x"
 
 
 # --------------------------------------------------------------------------- #
@@ -384,7 +384,7 @@ def phase_imports() -> None:
         "; ".join(failures[:3]) if failures else f"{imported} modules",
     )
 
-    from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x import (  # noqa: F401
+    from cellcyrix.single_cell_pipeline_agent.singlecell_10x import (  # noqa: F401
         run_pipeline,
         run_pipeline_multi,
     )
@@ -410,11 +410,11 @@ def _load_entry_module():
 
 
 def phase_config_plumbing():
-    from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x import (
+    from cellcyrix.single_cell_pipeline_agent.singlecell_10x import (
         run_pipeline,
         run_pipeline_multi,
     )
-    from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.pipeline_options import (
+    from cellcyrix.single_cell_pipeline_agent.singlecell_10x.pipeline_options import (
         PipelineOptions,
     )
 
@@ -500,7 +500,7 @@ def _offline_voter_kwargs() -> dict:
 
 
 def run_single(cohort_base: Path, out_dir: Path) -> Path:
-    from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x import run_pipeline
+    from cellcyrix.single_cell_pipeline_agent.singlecell_10x import run_pipeline
 
     group, sample = SINGLE_SAMPLE
     return run_pipeline(

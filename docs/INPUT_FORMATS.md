@@ -32,7 +32,7 @@ side utilities and by re-entry steps, never by `run_pipeline` / `run_pipeline_mu
 
 `load_10x_feature_barcode_matrix()` globs each slot in order and takes the first match, so both
 bare and sample-prefixed Cell Ranger / GEO filenames work
-([loader_10x.py:114-160](../agentic_ai_wf/single_cell_pipeline_agent/singlecell_10x/loader_10x.py#L114-L160)).
+([loader_10x.py:114-160](../cellcyrix/single_cell_pipeline_agent/singlecell_10x/loader_10x.py#L114-L160)).
 
 | Slot | Accepted filename patterns (in priority order) |
 |---|---|
@@ -95,7 +95,7 @@ ENSG00000186092	OR4F5	Gene Expression
 
 Before the matrix becomes `layers['counts']`, `_validate_raw_counts()` rejects anything that is
 not a genuine count matrix
-([loader_10x.py:50-90](../agentic_ai_wf/single_cell_pipeline_agent/singlecell_10x/loader_10x.py#L50-L90)):
+([loader_10x.py:50-90](../cellcyrix/single_cell_pipeline_agent/singlecell_10x/loader_10x.py#L50-L90)):
 
 | Check | Failure message |
 |---|---|
@@ -133,7 +133,7 @@ single:
 
 `sample_label` defaults to the folder's own name and becomes `obs['sample']` and the analysis
 name that prefixes every output file
-([main_single.py:167-171](../agentic_ai_wf/single_cell_pipeline_agent/singlecell_10x/main_single.py#L167-L171)).
+([main_single.py:167-171](../cellcyrix/single_cell_pipeline_agent/singlecell_10x/main_single.py#L167-L171)).
 Single mode has one group, so group DE is normally off.
 
 ---
@@ -141,7 +141,7 @@ Single mode has one group, so group DE is normally off.
 ## 5. Multi mode layout
 
 A two-level tree: level 1 is the experimental arm, level 2 is the sample
-([main_multi.py:134-164](../agentic_ai_wf/single_cell_pipeline_agent/singlecell_10x/main_multi.py#L134-L164)).
+([main_multi.py:134-164](../cellcyrix/single_cell_pipeline_agent/singlecell_10x/main_multi.py#L134-L164)).
 
 ```
 input_data/GSE212966/                     <- multi_base_dir
@@ -185,7 +185,7 @@ Rules the discovery step applies:
 
 Placed at `multi_base_dir`, auto-detected in this order: `metadata.csv`, `group_map.csv`,
 `metadata.xlsx`, `group_map.xlsx`. Override with `group_map_path`
-([main_multi.py:54-131](../agentic_ai_wf/single_cell_pipeline_agent/singlecell_10x/main_multi.py#L54-L131)).
+([main_multi.py:54-131](../cellcyrix/single_cell_pipeline_agent/singlecell_10x/main_multi.py#L54-L131)).
 
 Required columns — matched case-insensitively, extra columns ignored:
 

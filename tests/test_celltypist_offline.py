@@ -86,7 +86,7 @@ class TestCellTypistOffline(unittest.TestCase):
         _block_http()
         logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
 
-        from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.celltype_consensus import (
+        from cellcyrix.single_cell_pipeline_agent.singlecell_10x.celltype_consensus import (
             tools,
         )
 
@@ -155,7 +155,7 @@ class TestCellTypistOffline(unittest.TestCase):
     def test_06_every_catalogued_model_is_bundled(self):
         """The selector may return any name in the catalog, so all of them must be
         present — otherwise auto-selection silently loses the voter on some tissues."""
-        from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.celltype_consensus.celltypist_catalog import (
+        from cellcyrix.single_cell_pipeline_agent.singlecell_10x.celltype_consensus.celltypist_catalog import (
             HUMAN_CELLTYPIST_MODELS,
         )
 

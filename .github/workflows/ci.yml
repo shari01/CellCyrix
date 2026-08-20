@@ -1,0 +1,172 @@
+# CellCyrix CI — the gate the README documents, run on every push.
+#
+# Scope is deliberate: everything here runs with NO credentials, NO network access to a
+# model provider, and NO R. That is what makes it a gate rather than a thing that fails
+# for reasons unrelated to the change. The live LLM tests skip themselves unless
+# RUN_LIVE_LLM_TESTS is set, and the SingleR voter is off by default.
+#
+# Three jobs:
+#   lint  — ruff format + check, fast, fails first on style/lint regressions
+#   test  — the pytest suite plus the two executable suites, on 3.11 and 3.12
+#   slow  — determinism and FDR, which run two full pipelines and several DESeq2 fits
+#
+# `slow` is separated because it is minutes rather than seconds; it still runs on every
+# push, because a pipeline that stops being reproducible is exactly the regression that
+# must not reach a paper.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A new push to the same ref cancels the previous run; no point testing a stale commit.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep the pipeline off the network for model-provider calls even if a key leaks into
+  # the environment: an unset key makes the LLM voters abstain rather than call out.
+  SCPIPE_ENABLE_SINGLER: "0"
+  SCPIPE_ENABLE_PUBMED: "0"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install "ruff>=0.16,<1.0"
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+      - name: ruff check
+        run: ruff check .
+
+  test:
+    name: Tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Cache CellTypist models
+        uses: actions/cache@v4
+        with:
+          # Keyed on the checksum manifest: a change to the model set invalidates the
+          # cache, and an unchanged set is never re-downloaded.
+          path: shared_reference/celltypist_models/data/models
+          key: >-
+            celltypist-${{ hashFiles('shared_reference/celltypist_models/data/models/SHA256SUMS.txt') }}
+
+      - name: Fetch CellTypist models
+        run: fetch-celltypist-models
+
+      - name: Verify model provenance
+        # Fails the build if the installed scikit-learn stops reproducing any model's
+        # own arithmetic — the check that makes the version skew auditable.
+        run: pytest tests/test_model_provenance.py -q
+
+      - name: pytest
+        # -m "not slow" keeps the two multi-minute suites in the `slow` job.
+        run: pytest -q -m "not slow"
+
+      - name: Offline end-to-end smoke test
+        run: python tests/smoke_test.py
+
+      - name: Hierarchy resolver suite
+        run: python tests/run_resolver_tests.py
+
+      - name: CLI is installed and runnable
+        run: |
+          cellcyrix --version
+          cellcyrix --help > /dev/null
+          # --print-config resolves the shipped config without running an analysis.
+          cellcyrix --config config.yaml --print-config > /dev/null
+
+  slow:
+    name: Determinism and FDR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Cache CellTypist models
+        uses: actions/cache@v4
+        with:
+          path: shared_reference/celltypist_models/data/models
+          key: >-
+            celltypist-${{ hashFiles('shared_reference/celltypist_models/data/models/SHA256SUMS.txt') }}
+
+      - name: Fetch CellTypist models
+        run: fetch-celltypist-models
+
+      - name: Pipeline determinism (two full runs must agree exactly)
+        run: pytest tests/test_pipeline_determinism.py -m slow -q
+
+      - name: Pseudobulk FDR behaviour
+        # -s so the measured false discovery proportion is printed into the log and can
+        # be tracked over time, not just asserted.
+        run: pytest tests/test_pseudobulk_fdr.py -m slow -q -s
+
+  build:
+    name: Package builds and installs clean
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Build sdist and wheel
+        run: |
+          pip install build twine
+          python -m build
+
+      - name: Check metadata
+        # Catches the PEP 639 license/classifier conflict class of error before a
+        # release rather than at upload time.
+        run: twine check dist/*
+
+      - name: Install the wheel into a clean environment
+        run: |
+          python -m venv /tmp/fresh
+          /tmp/fresh/bin/pip install --upgrade pip
+          /tmp/fresh/bin/pip install dist/*.whl
+          /tmp/fresh/bin/cellcyrix --version

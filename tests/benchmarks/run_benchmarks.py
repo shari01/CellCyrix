@@ -56,18 +56,18 @@ for _d in (INPUTS, OUTPUTS, LOGS):
 
 
 def _find_repo_root(start: Path) -> Path:
-    """Walk up from ``start`` until the folder containing ``agentic_ai_wf`` is found."""
+    """Walk up from ``start`` until the folder containing ``cellcyrix`` is found."""
     for p in [start, *start.parents]:
-        if (p / "agentic_ai_wf").is_dir():
+        if (p / "cellcyrix").is_dir():
             return p
-    raise RuntimeError("Could not locate repo root (no 'agentic_ai_wf' on any parent).")
+    raise RuntimeError("Could not locate repo root (no 'cellcyrix' on any parent).")
 
 
 REPO_ROOT = _find_repo_root(HERE)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-PKG = "agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x"
+PKG = "cellcyrix.single_cell_pipeline_agent.singlecell_10x"
 
 logging.basicConfig(
     level=logging.INFO,

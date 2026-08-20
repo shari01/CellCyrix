@@ -31,15 +31,15 @@ import numpy as np
 # --------------------------------------------------------------------------- #
 def _find_repo_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "agentic_ai_wf").is_dir():
+        if (p / "cellcyrix").is_dir():
             return p
-    raise RuntimeError("repo root with 'agentic_ai_wf' not found")
+    raise RuntimeError("repo root with 'cellcyrix' not found")
 
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-PKG = "agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x"
+PKG = "cellcyrix.single_cell_pipeline_agent.singlecell_10x"
 
 
 def _write_10x(dir_path: Path, mat_genes_by_cells, gene_ids, gene_syms, barcodes):
@@ -395,10 +395,7 @@ class TestAuditorsRun(unittest.TestCase):
 
         ma = importlib.import_module("module_auditor")
         target = (
-            REPO_ROOT
-            / "agentic_ai_wf"
-            / "single_cell_pipeline_agent"
-            / "singlecell_10x"
+            REPO_ROOT / "cellcyrix" / "single_cell_pipeline_agent" / "singlecell_10x"
         )
         rep = ma.audit(target, include_consensus=True)
         self.assertGreaterEqual(rep["overall_score"], 95.0)
@@ -410,10 +407,7 @@ class TestAuditorsRun(unittest.TestCase):
 
         pa = importlib.import_module("pipeline_auditor")
         target = (
-            REPO_ROOT
-            / "agentic_ai_wf"
-            / "single_cell_pipeline_agent"
-            / "singlecell_10x"
+            REPO_ROOT / "cellcyrix" / "single_cell_pipeline_agent" / "singlecell_10x"
         )
         rep = pa.audit(target, include_consensus=False)
         self.assertGreaterEqual(rep["overall_score"], 95.0)

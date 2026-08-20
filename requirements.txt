@@ -71,9 +71,9 @@ gseapy==1.1.11
 mygene==3.2.2
 biothings_client==0.4.1
 
-# --- LLM layer (agentic_ai_wf.llm) + HTML/PDF report --------------------------
+# --- LLM layer (cellcyrix.llm) + HTML/PDF report --------------------------
 openai==2.45.0
-openai-agents==0.18.2      # imported by agentic_ai_wf.llm and the module's agent wrapper
+openai-agents==0.18.2      # imported by cellcyrix.llm and the module's agent wrapper
 pydantic==2.13.4
 requests==2.32.5
 httpx==0.28.1

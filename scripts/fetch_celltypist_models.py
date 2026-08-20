@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.celltype_consensus.fetch_models_cli import (  # noqa: E402 - needs the sys.path line above
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.celltype_consensus.fetch_models_cli import (  # noqa: E402 - needs the sys.path line above
     main,
 )
 

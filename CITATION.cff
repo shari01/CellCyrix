@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+title: >-
+  CellCyrix: a disease-agnostic single-cell pipeline with multi-voter consensus
+  cell-type annotation and donor-level pseudobulk differential expression
+message: If you use this software, please cite it using these metadata.
+type: software
+authors:
+  - family-names: Malik
+    given-names: Sheryar
+    email: sheryar.malik@ayassbioscience.com
+    affiliation: Ayass Bioscience LLC
+repository-code: https://github.com/ayassbioscience/cellcyrix
+license: MIT
+version: 1.0.0
+# Replace with the release date when you tag and archive the version you submit.
+date-released: 2026-08-12
+keywords:
+  - single-cell
+  - scRNA-seq
+  - cell-type annotation
+  - consensus annotation
+  - pseudobulk differential expression
+  - bioinformatics
+abstract: >-
+  CellCyrix takes raw 10x Genomics feature-barcode matrices through QC and filtering,
+  doublet detection, highly-variable-gene selection, PCA/UMAP, Leiden clustering,
+  cell-type annotation, differential expression, pathway enrichment, and an HTML/PDF
+  report. Two design decisions distinguish it from a conventional Scanpy script.
+  Annotation is a consensus of four independent voters — CellTypist, SingleR, a
+  knowledge-based LLM marker-reasoning voter, and a PubMed literature voter —
+  harmonised onto a 404-node cell-type hierarchy, with a curated marker lineage gate
+  that can veto a call rather than accept the least-bad option. Differential expression
+  uses the donor as the unit of replication, running pseudobulk DESeq2 over per-sample
+  summed raw counts, so n is the number of donors; cell-level differential expression
+  is still written but stamped as exploratory. Every run emits a provenance manifest
+  recording the seed, package versions, reference tables used, resolved parameters, and
+  the scikit-learn version each CellTypist model was pickled with alongside a numeric
+  check that the runtime reproduces that model's own arithmetic.

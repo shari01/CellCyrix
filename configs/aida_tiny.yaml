@@ -1,0 +1,94 @@
+# Benchmark run: AIDA v1 (Asian Immune Diversity Atlas, Cell 2025), 4 largest donors.
+#
+# Purpose is ANNOTATION ACCURACY, nothing else. The cohort is all-normal blood, so there
+# is one group and no case/control contrast — group DE is switched off rather than left
+# on to fail. Ground truth lives in input_data/aida_tiny/truth_labels.csv and is
+# re-attached after the run by h5ad_to_10x_cohort.py attach-truth.
+#
+# All three network/R-dependent voters are OFF so this run needs no API key, no network
+# and no R. That makes CellTypist the only voter, which is the point of a first run:
+# establish the baseline and prove the chain end to end before spending money on the LLM
+# voters. Turn enable_knowledge_based / enable_pubmed / enable_singler back on for the
+# full comparison once this completes.
+mode: multi
+
+common:
+  do_pathway_clustering: false
+  # No trajectory: this is a discrete-cell-type accuracy benchmark, and DPT adds runtime
+  # for a result nothing here reads.
+  do_dpt: false
+  dpt_root_group: auto
+  geo_json_path: null
+  logos_dir: null
+  # The report's narrative sections call OpenRouter; off so the run is credential-free.
+  generate_report: false
+  prepare_for_bisque: false
+
+  enable_celltypist: true
+  enable_knowledge_based: false
+  enable_singler: false
+  enable_pubmed: false
+
+  # Fixed rather than "auto": auto resolution is LLM-driven, and it is off. AIDA is PBMC,
+  # so the immune model is the correct choice and pinning it keeps the run reproducible.
+  tissue: blood
+  species: human
+  celltypist_model: Immune_All_Low.pkl
+  singler_reference: auto
+
+  skip_tsne: true
+  skip_pca_cluster_plots: true
+  skip_per_celltype_plots: true
+  skip_per_celltype_csvs: true
+  skip_per_cluster_marker_csvs: true
+
+  cleanup_raw_pathway_csvs: true
+  cleanup_dedup_logs: true
+  cleanup_pipeline_log: false
+  cleanup_per_cluster_marker_csvs: true
+
+clustering:
+  leiden_resolution: 0.5
+  evaluate_resolutions: false
+  resolution_candidates: [0.2, 0.4, 0.5, 0.6, 0.8, 1.0]
+  min_cluster_cells: 20
+  resolution_silhouette_max_cells: 5000
+
+qc:
+  min_genes: 200
+  max_genes: 6000
+  max_mito_percent: 15.0
+  # Doublet detection ON but removal OFF: a dropped cell has no truth label to score,
+  # and the doublet score is what voter-disagreement entropy gets correlated against in
+  # the benchmark's 08_disagreement table.
+  do_doublet_detection: true
+  remove_doublets: false
+
+annotation:
+  mixed_cluster_min_dominant_fraction: 0.70
+  mixed_cluster_second_label_fraction: 0.20
+  use_subtypes_for_downstream: false
+  reuse_existing_final_annotation: false
+  final_annotation_column: null
+
+downstream:
+  # Nothing excluded: the benchmark must see every cell the pipeline called, including
+  # the low-confidence ones — those are exactly what the risk-coverage curve measures.
+  exclude_low_confidence_de: false
+  excluded_consensus_tiers: []
+  do_pseudobulk_de: false
+
+de:
+  reference_group: null
+  lfc_threshold: 1.0
+  alpha: 0.05
+
+multi:
+  multi_base_dir: 'input_data/aida_tiny'
+  out_name: 'aida_tiny'
+  group_map_path: null
+  # Single group (all normal), so no cohort contrast is possible.
+  do_groupwise_de: false
+  batch_key: sample
+  integration_method: bbknn
+  run_per_sample: false

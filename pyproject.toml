@@ -1,0 +1,251 @@
+[build-system]
+# >= 77 rather than >= 61: the PEP 639 `license = "MIT"` expression and
+# `license-files` key below are only understood from that version, and an older
+# setuptools in a fresh build environment would reject them.
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cellcyrix"
+version = "1.0.0"
+description = "Single- and multi-sample Scanpy 10x pipeline with multi-method consensus cell-type annotation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  {name = "Sheryar Malik", email = "sheryar.malik@ayassbioscience.com"}
+]
+maintainers = [
+  {name = "Sheryar Malik", email = "sheryar.malik@ayassbioscience.com"}
+]
+keywords = [
+  "single-cell",
+  "scRNA-seq",
+  "scanpy",
+  "cell-type-annotation",
+  "consensus-annotation",
+  "pseudobulk",
+  "differential-expression",
+  "bioinformatics",
+]
+# No "License ::" classifier: those are superseded by the PEP 639 `license`
+# expression above, and setuptools >= 77 errors if both are present.
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+# Bounded both ways per the engineering standard (§15): a lower bound for the
+# features the code uses, an upper bound at the next major so a breaking release
+# cannot silently land in a rebuild. Exact resolved versions are pinned in uv.lock.
+dependencies = [
+  # scientific / scanpy stack
+  "scanpy>=1.11,<2.0",
+  "anndata>=0.12,<0.13",
+  "numpy>=2.0,<3.0",
+  "pandas>=2.0,<3.0",
+  "scipy>=1.16,<2.0",
+  "matplotlib>=3.10,<4.0",
+  "seaborn>=0.13,<0.14",
+  "scikit-learn>=1.7,<2.0",
+  "scikit-misc>=0.5.2,<0.6",
+  "statsmodels>=0.14,<0.15",
+  "leidenalg>=0.11,<0.12",
+  "igraph>=1.0,<2.0",
+  "umap-learn>=0.5.9,<0.6",
+  "bbknn>=1.6,<2.0",
+  "numba>=0.62,<0.63",
+  "h5py>=3.15,<4.0",
+  "zarr>=3.1,<4.0",
+  "openpyxl>=3.1,<4.0",
+  # differential expression
+  "pydeseq2>=0.5.4,<0.6",
+  # annotation voters
+  "celltypist>=1.7,<2.0",
+  "rpy2>=3.6,<4.0",
+  "sentence-transformers>=5.1,<6.0",
+  "faiss-cpu>=1.13,<2.0",
+  # enrichment / gene naming
+  "gseapy>=1.1,<2.0",
+  "mygene>=3.2,<4.0",
+  # LLM / report layer
+  "python-decouple>=3.8,<4.0",
+  "python-dotenv>=1.0.1,<2.0",
+  "requests>=2.32,<3.0",
+  "openai>=2.9.0,<3.0",
+  "openai-agents>=0.1.0,<0.3",
+  "pydantic>=2.0,<3.0",
+  "playwright>=1.57.0,<2.0",
+  "Jinja2>=3.1,<4.0",
+  "PyYAML>=6.0,<7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ayassbioscience/cellcyrix"
+Documentation = "https://github.com/ayassbioscience/cellcyrix/blob/main/docs/PIPELINE_MASTER_DOCUMENTATION.md"
+Repository = "https://github.com/ayassbioscience/cellcyrix"
+Issues = "https://github.com/ayassbioscience/cellcyrix/issues"
+
+# `cellcyrix` runs an analysis; `fetch-celltypist-models` is a maintenance command.
+#
+# This project previously shipped NO run entry point on purpose — the position was that
+# it is a library plus one official script, the root `main.py`. That holds for a
+# repository consumed by its own authors, but not for one a third party must reproduce:
+# `pip install` puts the package on the path without putting `main.py` anywhere, so an
+# installed copy had no way to start a run, and a reviewer's first command had no
+# answer. `cli:main` is a thin argument parser over the same `main.main(config_path=,
+# output_root=)` call the root script makes — it adds no behaviour and cannot drift,
+# because there is only one code path underneath.
+#
+# The CellTypist models are fetched rather than committed (Rule 17.3), and the README
+# documents `fetch-celltypist-models` for pre-warming the bundle — so it has to exist
+# for someone who `pip install`ed rather than cloned. It is a thin front end over
+# `celltype_consensus.model_integrity`, which is where the pipeline's own on-demand
+# fetch lives, so the two cannot drift.
+[project.scripts]
+cellcyrix = "cellcyrix.cli:main"
+fetch-celltypist-models = "cellcyrix.single_cell_pipeline_agent.singlecell_10x.celltype_consensus.fetch_models_cli:main"
+
+[project.optional-dependencies]
+# The tooling the engineering standard's 30-second gate needs:
+#     ruff format . && ruff check . && pytest
+dev = [
+  "ruff>=0.16,<1.0",
+  "pytest>=8.0,<10.0",
+]
+
+# --- tests ------------------------------------------------------------------
+[tool.pytest.ini_options]
+# Both trees are collected. `cellcyrix` was previously omitted, which meant the
+# six test modules under cellcyrix/llm/tests/ never ran in the gate — and they
+# did not pass: one errored on an unregistered marker and two failed on a Django
+# import. Excluding a directory is not the same as those tests being green, so the
+# gate now sees them.
+testpaths = ["tests", "cellcyrix"]
+# The demo/runner scripts in tests/ are executables, not test modules: collecting
+# them would run a full pipeline on import. Only test_*.py is collected.
+python_files = ["test_*.py"]
+# `slow` is excluded by default so the documented gate stays a ~25-second command.
+# The slow suites (two full pipeline runs for determinism, several DESeq2 fits for the
+# FDR characterisation) are minutes, and CI runs them in a separate job on every push:
+#     pytest -m slow            # just those
+#     pytest -m ""              # everything, no marker filter
+addopts = "-q --strict-markers -m 'not slow'"
+markers = [
+  "slow: end-to-end runs measured in minutes (smoke test, benchmarks)",
+  # Needs a live LLM endpoint and a key. Registered so --strict-markers does not
+  # turn the module into a collection ERROR; the tests themselves skip unless
+  # RUN_LIVE_LLM_TESTS is set, so a default run neither errors nor calls out.
+  "integration: requires a live external service (network + credentials)",
+]
+
+# --- lint / format ----------------------------------------------------------
+# Line length and target version match the engineering standard (88 / py3.11).
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+# `docs` is excluded because ruff formats Python fenced in Markdown: it collapses
+# the aligned trailing comments in the documentation's code examples, which are
+# aligned on purpose to be read rather than executed.
+extend-exclude = ["outputs", "shared_reference", "input_data", "docs"]
+
+[tool.ruff.lint]
+# Deliberately staged rather than "everything on". These are the rules whose
+# findings are either real defects or mechanically safe to fix:
+#   E,W  pycodestyle   F  pyflakes (unused imports/vars, undefined names)
+#   I    import sorting (Rule 2)   B  bugbear   BLE,E722  blind/bare except (Rule 8)
+#   G    logging format            SIM  simplifications
+#   T20  flake8-print — `print()` in library code (Rule 9)
+#
+# T20 added 2026-08-06. The per-file-ignores below have listed T201 exemptions
+# since this config was written, but T20 was never in `select`, so the rule never
+# ran and the exemption list was decorative — 21 unexempted print() calls had
+# accumulated, 19 of them in singlecell_sc_report_generation.py, a library module
+# that already had a module-level logger it simply was not using. Those are now
+# logger calls; enabling the rule is what stops them coming back.
+#
+# NOT enabled yet: UP (pyupgrade). It reports 650 findings that are purely
+# `Dict`->`dict` / `Optional[X]`->`X | None` annotation modernisation across the
+# whole tree — worth doing as its own isolated commit, not mixed into a lint pass.
+select = ["E", "W", "F", "I", "B", "BLE", "G", "SIM", "T20"]
+ignore = [
+  "E501",    # line length is enforced by the formatter, not the linter
+  "SIM105",  # contextlib.suppress is not clearer than try/except: pass here
+
+  # BLE001 (blind `except Exception`) — DELIBERATE, reviewed 2026-08-06.
+  #
+  # 58 sites remain, and every one is a best-effort boundary that LOGS before it
+  # degrades: a figure that fails to render, an optional voter that is unavailable,
+  # a report section that cannot be built. In a pipeline where one run is hours of
+  # compute over a real cohort, killing the run because a plot failed loses more
+  # than it protects — so these boundaries catch broadly on purpose and record what
+  # happened. The rule's real targets were fixed rather than ignored:
+  #
+  #   * 4 bare `except:` (which also swallowed KeyboardInterrupt) -> specific types
+  #   * 9 `except Exception: pass`                               -> specific types
+  #   * 26 handlers that fell back with no record at all         -> now log at debug
+  #   * 7 production `assert`s                                   -> typed exceptions
+  #
+  # Re-audit with: ruff check . --select BLE001 --no-cache
+  # A NEW blind except should still be justified in review; this ignore exists so
+  # the 58 reviewed ones do not mask the next one by burying the signal in noise.
+  "BLE001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Rule 9 is "logging, never print()", and as of 2026-08-06 it holds with NO
+# production exemptions — `print` appears zero times outside tests/, including in
+# this package's own main.py entry point.
+#
+# This list previously exempted several modules on the theory that their stdout
+# was a machine-readable protocol. It was not. Both callers of pipeline_subprocess
+# read the result dict from the `--result-json` FILE — single_cell_pipeline_agent/
+# main.py even carries the comment "output is read from result_json_path, not
+# stdout" — and the only stdout consumers hand the text straight to a logger.
+# Nothing ever parsed it, so nothing broke by converting it.
+#
+# Each converted subprocess module now calls logging.basicConfig(stream=stdout)
+# itself: they run as fresh interpreters with no inherited handlers, so without
+# that the records would be dropped and the parent would capture an empty string.
+#
+# tests/** keeps its exemption: pytest captures stdout by design, and a test that
+# prints is reporting to the person reading the run, not to a log.
+"tests/**" = ["T201", "E402"]
+
+# E402 (import not at top of module) is a REQUIREMENT in these two files, not an
+# oversight, so it is ignored per-file with the reason recorded here:
+#
+#   pipeline.py            the matplotlib backend must be selected BEFORE
+#                          `matplotlib.pyplot` is imported (it cannot be changed
+#                          afterwards), and pyplot is imported at module scope. A
+#                          head-less run or a subprocess has no display.
+#   pipeline_subprocess.py `sys.std*.reconfigure(...)` must run before the pipeline
+#                          is imported, or scanpy's own status output raises
+#                          UnicodeEncodeError on a Windows cp1252 console.
+#
+# Corrected 2026-08-11. This exemption previously claimed pipeline.py also had to
+# call `apply_figure_style()` before importing the sibling plotting modules, because
+# they "read matplotlib rcParams at import time". They do not — every rcParams and
+# pyplot use in celltype_qc_plots / group_de / pathway_enrichment / consensus_plots
+# is inside a function body, verified by AST. The call is now made inside
+# `run_scanpy_pipeline`, so importing the module no longer mutates a caller's
+# rcParams, and the same fix was applied to rank_genes_subprocess.py (which needed
+# no exemption afterwards and no longer has one).
+#
+# Everywhere else E402 stays enabled; the two stray imports it caught in
+# llm/clients.py and singlecell_sc_report_generation.py were hoisted, not ignored.
+"**/pipeline.py" = ["E402"]
+"**/pipeline_subprocess.py" = ["E402"]
+
+# Discover the nested package tree.
+[tool.setuptools.packages.find]
+include = ["cellcyrix*"]
+
+# Ship non-Python assets used at runtime (R bridge for SingleR, report logos).
+[tool.setuptools.package-data]
+"*" = ["*.R", "*.png"]

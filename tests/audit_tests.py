@@ -26,20 +26,20 @@ import numpy as np
 
 
 # --------------------------------------------------------------------------- #
-#  Locate + import the real pipeline package (repo root holds agentic_ai_wf/)
+#  Locate + import the real pipeline package (repo root holds cellcyrix/)
 # --------------------------------------------------------------------------- #
 def _repo_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "agentic_ai_wf").is_dir():
+        if (p / "cellcyrix").is_dir():
             return p
-    raise RuntimeError("repo root containing 'agentic_ai_wf' not found")
+    raise RuntimeError("repo root containing 'cellcyrix' not found")
 
 
 REPO_ROOT = _repo_root(Path(__file__).resolve())
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-PKG = "agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x"
+PKG = "cellcyrix.single_cell_pipeline_agent.singlecell_10x"
 
 
 def _imp(mod: str):
@@ -3039,7 +3039,7 @@ class TestBackwardCompatibility(unittest.TestCase):
         }
         # no nested sections at all -> flatten yields nothing, nothing breaks
         self.assertEqual(self.main.flatten_sections(cfg), {})
-        from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x import (
+        from cellcyrix.single_cell_pipeline_agent.singlecell_10x import (
             run_pipeline_multi,
         )
 
@@ -3089,7 +3089,7 @@ class TestBackwardCompatibility(unittest.TestCase):
         self.assertEqual(flat["mixed_cluster_min_dominant_fraction"], 0.6)
 
         # every flattened key must be a real parameter of BOTH drivers and the pipeline
-        from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x import (
+        from cellcyrix.single_cell_pipeline_agent.singlecell_10x import (
             run_pipeline,
             run_pipeline_multi,
         )

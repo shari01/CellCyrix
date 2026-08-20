@@ -1,7 +1,10 @@
-# single-cell-pipeline-agent
+# CellCyrix
 
 Single- and multi-sample Scanpy 10x pipeline with multi-voter consensus cell-type
 annotation and donor-level pseudobulk differential expression.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
 ---
 
@@ -26,7 +29,21 @@ Two things distinguish it from a plain Scanpy script:
   but is stamped as exploratory.
 
 Every run writes a provenance manifest recording the seed, package versions, the
-reference table actually used, and the resolved parameters.
+reference table actually used, the resolved parameters, and two things that make the
+annotation numbers auditable rather than merely reproducible-looking:
+
+- **Which scikit-learn pickled each CellTypist model, against the one that ran it.**
+  30 of the 41 bundled models were written by scikit-learn 0.24.1, 8 by 1.2.2, 3 by
+  1.0.1 — upstream's own model zoo — so a modern runtime warns that results "might be
+  invalid". Rather than silence that, every model is checked at load: `predict_proba` is
+  recomputed from the persisted `coef_`/`intercept_`/`mean_`/`scale_` arrays with NumPy
+  alone and must match exactly (observed difference: 0.0). A model that ever fails
+  aborts the run instead of quietly annotating. The models are **not** re-pickled, which
+  would invalidate `SHA256SUMS.txt` and destroy upstream provenance while changing no
+  number. See `celltype_consensus/model_provenance.py`.
+- **How much of the LLM output was replayed from cache.** `fully_cached: true` means the
+  run made no LLM network call and can be regenerated exactly, offline, from the cache
+  directory alone.
 
 ## Inputs
 
@@ -128,14 +145,24 @@ leaves a truncated table that parses as a complete one.
 
 ## How to run
 
-There is deliberately **no CLI**. Edit `config.yaml`, then:
+Install first:
 
 ```bash
-python main.py
+pip install -e .            # or: uv sync
 ```
 
-Set `mode:` to `single` or `multi` at the top of the config. To run a different
-configuration without editing `main.py`, pass it in:
+The config drives everything, including whether the run is single-sample or a cohort.
+Set `mode:` to `single` or `multi` at its top. Three equivalent ways in:
+
+```bash
+cellcyrix --config config.yaml                                  # installed console script
+cellcyrix --config my_config.yaml --output-root /data/runs
+cellcyrix --config config.yaml --print-config                   # resolve and exit, run nothing
+```
+
+```bash
+python main.py              # from a clone; uses ./config.yaml and ./outputs
+```
 
 ```python
 from pathlib import Path
@@ -145,11 +172,29 @@ main.main(config_path=Path("my_config.yaml"))  # outputs under ./outputs/
 main.main(config_path=Path("my_config.yaml"), output_root=Path("/data/runs"))
 ```
 
-Install first:
+All three land on the same `cellcyrix.runner.run_from_config`, so they cannot disagree
+about what a config means. `main.py` holds only the repo-relative defaults; the console
+script defaults to `./config.yaml` and `./outputs` in the working directory, because an
+installed package has no repository root to be relative to.
+
+`--print-config` is worth knowing about: it resolves the config — including nested
+sections flattened onto driver arguments — prints it as JSON and exits, so you can check
+what a run will actually do before spending the compute.
+
+### In Docker
 
 ```bash
-pip install -e .            # or: uv sync
+docker build -t cellcyrix:1.0.0 .
+docker run --rm \
+    -v "$PWD/input_data:/data/input:ro" \
+    -v "$PWD/outputs:/data/outputs" \
+    cellcyrix:1.0.0 --config /data/input/config.yaml --output-root /data/outputs
 ```
+
+The image pins R and its CRAN snapshot via `rocker/r-ver`, installs SingleR + celldex,
+fetches and checksum-verifies all 41 CellTypist models at build time, and runs the full
+test suite as a build step — so a build that succeeds is an environment that produces
+correct output. It needs no network at run time.
 
 The CellTypist models download on first use and are verified on every load; run
 `fetch-celltypist-models` if you want all 41 in place up front.
@@ -168,10 +213,20 @@ pip install -e ".[dev]"
 
 ruff format .    # formatter
 ruff check .     # linter
-pytest           # 167 tests, ~65 s (tests/ + agentic_ai_wf/llm/tests/)
+pytest           # 260 passed, 8 skipped, 24 deselected, ~25 s
 ```
 
-Two additional suites are not collected by `pytest` because they are executables
+`pytest` excludes the `slow` marker so the gate stays a ~25-second command. The two slow
+suites are the ones that verify the claims a paper rests on, and CI runs them on every
+push:
+
+```bash
+pytest -m slow tests/test_pipeline_determinism.py   # two full runs must agree exactly
+pytest -m slow tests/test_pseudobulk_fdr.py -s      # DE false-discovery behaviour
+pytest -m ""                                        # everything, no marker filter
+```
+
+Two further suites are not collected by `pytest` because they are executables
 rather than test modules:
 
 ```bash
@@ -184,6 +239,60 @@ temp workspace, runs both the single and multi drivers through the real `main.py
 entry point, and asserts on every artifact downstream consumers read — including a
 direction positive control that the genes simulated as up in CASE come out with a
 positive `log2FoldChange`. It needs no network, no credentials and no R.
+
+## Benchmarking the annotation
+
+[`benchmarks/`](benchmarks/) scores the consensus against ground truth alongside every
+single-voter baseline and voter-subset ablation, with bootstrap confidence intervals,
+risk–coverage curves, calibration/ECE, and per-cell voter-disagreement entropy:
+
+```bash
+python benchmarks/run_annotation_benchmark.py \
+    --h5ad outputs/<run>/<name>_processed_scanpy_output.h5ad \
+    --truth-column cell_type
+```
+
+Single-voter baselines are free — the pipeline already writes each voter's own call into
+`obs`, so one run per dataset gives the whole comparison and the ablations are arithmetic
+over those columns rather than five more pipelines. Azimuth and GPTCelltype need R; run
+them separately, join their labels into `obs`, and pass `--extra-method`.
+
+The harness reports on its own weakest point: harmonising labels through the pipeline's
+own hierarchy could flatter the pipeline, so resolution rates are reported per method
+before any accuracy number, and any method resolving >10pp worse than the truth column is
+flagged in the manifest. See [`benchmarks/README.md`](benchmarks/README.md).
+
+The held-out cell-type experiment — the one that tests the disease-agnostic claim — is
+separate, because it asks a different question: when a type is absent from the reference,
+does the method abstain or confidently mislabel it?
+
+```bash
+python benchmarks/run_heldout_celltype.py \
+    --h5ad outputs/<run>/<name>_processed_scanpy_output.h5ad \
+    --truth-column cell_type --n-types 5
+```
+
+### Known limitation: do not claim "FDR controlled at 5%"
+
+`tests/test_pseudobulk_fdr.py` establishes what is safe to state — the null p-values are
+uniform, `p_value_adj` is exactly Benjamini-Hochberg on `p_value` (agreement to 4e-14), a
+cohort with no true differences yields ~0.075% discoveries, power and direction are
+correct, and discoveries do not scale with cells per donor, so the donor really is the
+unit of replication.
+
+What it does **not** establish is nominal FDR control. On its simulator the mean false
+discovery proportion is ~0.17 against a nominal 0.05, and that does not converge with
+more genes (600 → 5000) or more donors (4 → 12). The adjustment step is provably correct
+and the null is uniform, so the residual sits in the far tail: null `p < 0.01` fires at
+~1.5× its nominal rate. Two causes remain live and the test cannot separate them —
+DESeq2's Wald test using an asymptotic approximation on shrunken dispersions, and the
+simulator drawing a constant dispersion that DESeq2's `a/mean + b` trend cannot represent.
+Resolve this against a real dataset with matched bulk RNA-seq before making any FDR claim
+in print.
+
+## Citing
+
+See [`CITATION.cff`](CITATION.cff). Licensed under the [MIT License](LICENSE).
 
 ## Owner
 

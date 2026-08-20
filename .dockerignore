@@ -1,0 +1,53 @@
+# Keep the build context small and the image reproducible. Anything that is a local
+# artifact, a credential, or research data does not belong in a published image.
+
+# Virtualenvs — the image builds its own at /opt/venv.
+.venv/
+.venv*/
+venv/
+env/
+
+# Credentials. Never bake these in; pass at run time with -e or --env-file.
+.env
+.env.*
+!.env.example
+
+# Caches and build artifacts.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+.llm_cache/
+.pubmed_cache/
+
+# Research data and run outputs are bind-mounted, not copied.
+input_data/
+outputs/
+
+# The CellTypist .pkl models are fetched and checksum-verified during the build, not
+# copied from the host — a stale or hand-edited local copy must not reach the image.
+# The manifest and URL index ARE copied (they are small and tracked), which is what the
+# build-time fetch verifies against.
+shared_reference/celltypist_models/data/models/*.pkl
+
+# Unrelated vendored project.
+Oncocyrix_MultiCohort-master/
+
+# VCS and editor state.
+.git/
+.gitignore
+.github/
+.claude/
+.idea/
+.vscode/
+
+# Docs are large binaries (xlsx, pptx, png) and are not needed at run time.
+docs/
+
+# Local scratch.
+test_run_cli.txt
+*.log

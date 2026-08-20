@@ -31,32 +31,32 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x import (  # noqa: E402
     run_pipeline,
     run_pipeline_multi,
 )
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.atomic_io import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.atomic_io import (  # noqa: E402
     atomic_write,
     read_table,
     write_table,
 )
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.celltype_consensus import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.celltype_consensus import (  # noqa: E402
     model_integrity,
 )
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.celltype_consensus.model_integrity import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.celltype_consensus.model_integrity import (  # noqa: E402
     ModelIntegrityError,
     ensure_model_file,
     load_manifest,
     verify_model_file,
 )
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.column_names import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.column_names import (  # noqa: E402
     to_canonical_columns,
 )
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.output_paths import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.output_paths import (  # noqa: E402
     OutputPathError,
     resolve_output_dir,
 )
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.pipeline_options import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.pipeline_options import (  # noqa: E402
     MULTI_ONLY_PARAMS,
     SHARED_PARAMS,
     SINGLE_ONLY_PARAMS,
@@ -64,7 +64,7 @@ from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.pipeline_options im
     UnknownPipelineOption,
     check_parameter_contract,
 )
-from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.safe_names import (  # noqa: E402
+from cellcyrix.single_cell_pipeline_agent.singlecell_10x.safe_names import (  # noqa: E402
     safe_filename,
 )
 
@@ -255,7 +255,7 @@ class TestDriverParameterContract(unittest.TestCase):
     def test_run_scanpy_pipeline_takes_the_options_object(self):
         # The whole point of the refactor: the core function no longer restates the
         # option list. 6 parameters, one of which is the options object.
-        from agentic_ai_wf.single_cell_pipeline_agent.singlecell_10x.pipeline import (
+        from cellcyrix.single_cell_pipeline_agent.singlecell_10x.pipeline import (
             run_scanpy_pipeline,
         )
 
